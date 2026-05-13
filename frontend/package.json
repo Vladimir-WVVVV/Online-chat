@@ -1,0 +1,40 @@
+{
+  "name": "onlinechat-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron electron/main.cjs\"",
+    "electron:build": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "@stomp/stompjs": "^7.0.0",
+    "axios": "^1.7.9",
+    "element-plus": "^2.8.8",
+    "pinia": "^2.2.6",
+    "sockjs-client": "^1.6.1",
+    "vue": "^3.5.12",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "vite": "^5.4.11",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "edu.whu.onlinechat",
+    "productName": "OnlineChat",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ]
+  }
+}
+
