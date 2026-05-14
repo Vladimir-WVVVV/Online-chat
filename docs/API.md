@@ -20,7 +20,7 @@
 - `DELETE /api/friends/{friendId}`
 
 ## 群聊
-- `POST /api/groups`
+- `POST /api/groups` 创建群聊，body: `{ "name": "课程项目讨论群", "description": "软件工程课程项目群", "memberIds": [2, 3] }`；`memberIds` 可选，只能邀请好友
 - `GET /api/groups`
 - `GET /api/groups/{id}`
 - `POST /api/groups/{id}/join`

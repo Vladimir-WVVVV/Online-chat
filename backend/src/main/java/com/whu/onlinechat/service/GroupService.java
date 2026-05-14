@@ -14,7 +14,9 @@ import com.whu.onlinechat.mapper.NotificationMapper;
 import com.whu.onlinechat.mapper.UserMapper;
 import com.whu.onlinechat.vo.GroupMemberVO;
 import com.whu.onlinechat.vo.GroupVO;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ public class GroupService {
     private final UserMapper userMapper;
     private final NotificationMapper notificationMapper;
     private final UserService userService;
+    private final FriendService friendService;
 
     @Transactional
     public GroupVO create(Long userId, CreateGroupRequest request) {
@@ -42,6 +45,13 @@ public class GroupService {
         owner.setUserId(userId);
         owner.setRole("OWNER");
         memberMapper.insert(owner);
+        for (Long memberId : inviteMemberIds(userId, request.memberIds())) {
+            GroupMember member = new GroupMember();
+            member.setGroupId(group.getId());
+            member.setUserId(memberId);
+            member.setRole("MEMBER");
+            memberMapper.insert(member);
+        }
         return toVO(group, userId);
     }
 
@@ -63,9 +73,7 @@ public class GroupService {
             .eq(GroupMember::getGroupId, groupId)
             .eq(GroupMember::getUserId, userId));
         if (existing != null) {
-            existing.setDeleted(0);
-            memberMapper.updateById(existing);
-            return;
+            throw new BizException("已在群聊中");
         }
         GroupMember member = new GroupMember();
         member.setGroupId(groupId);
@@ -127,6 +135,27 @@ public class GroupService {
     public List<Long> memberIds(Long groupId) {
         return memberMapper.selectList(new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, groupId))
             .stream().map(GroupMember::getUserId).toList();
+    }
+
+    private Set<Long> inviteMemberIds(Long ownerId, List<Long> memberIds) {
+        Set<Long> uniqueIds = new LinkedHashSet<>();
+        if (memberIds == null) {
+            return uniqueIds;
+        }
+        for (Long memberId : memberIds) {
+            if (memberId == null || ownerId.equals(memberId)) {
+                continue;
+            }
+            User target = userMapper.selectById(memberId);
+            if (target == null) {
+                throw new BizException("邀请用户不存在");
+            }
+            if (!friendService.isFriend(ownerId, memberId)) {
+                throw new BizException("只能邀请好友加入群聊");
+            }
+            uniqueIds.add(memberId);
+        }
+        return uniqueIds;
     }
 
     private GroupVO toVO(ChatGroup group, Long viewerId) {

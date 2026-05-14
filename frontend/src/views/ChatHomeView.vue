@@ -12,7 +12,7 @@
       <div class="toolbar-row">
         <el-button size="small" @click="openAddFriend">添加好友</el-button>
         <el-button size="small" @click="requestDialog = true">好友申请</el-button>
-        <el-button size="small" @click="groupDialog = true">创建群聊</el-button>
+        <el-button size="small" @click="openGroupDialog">创建群聊</el-button>
       </div>
 
       <el-tabs v-model="leftTab" stretch class="left-tabs">
@@ -33,10 +33,6 @@
           <el-empty v-if="!friends.length" description="暂无好友" />
         </el-tab-pane>
         <el-tab-pane label="群聊" name="groups">
-          <div class="join-group-row">
-            <el-input v-model="joinGroupId" size="small" placeholder="输入群 ID 加入" />
-            <el-button size="small" @click="joinGroup">加入</el-button>
-          </div>
           <button
             v-for="group in groups"
             :key="group.id"
@@ -67,41 +63,43 @@
         </div>
       </header>
 
-      <div class="message-list">
+      <div ref="messageListRef" class="message-list">
         <el-button v-if="activeTarget" size="small" text @click="loadMore">加载更早消息</el-button>
         <div v-if="!activeTarget" class="empty-state">选择好友或群聊开始课堂演示</div>
-        <article
-          v-for="message in orderedMessages"
-          :key="message.messageId"
-          class="message-row"
-          :class="{ mine: message.senderId === auth.user?.id }"
-        >
-          <div class="bubble">
-            <div class="message-meta">{{ message.senderName }} · {{ formatTime(message.createTime) }}</div>
-            <template v-if="message.recalled">
-              <em>消息已撤回</em>
-            </template>
-            <template v-else-if="message.messageType === 'IMAGE'">
-              <img v-if="filePreviews[message.fileId]" class="chat-image" :src="filePreviews[message.fileId]" alt="图片消息" />
-              <div>{{ message.content }}</div>
-              <el-button size="small" @click="downloadFile(message.fileId)">下载</el-button>
-            </template>
-            <template v-else-if="message.messageType === 'FILE'">
-              <div class="file-message">{{ message.content }}</div>
-              <el-button size="small" @click="downloadFile(message.fileId)">下载文件</el-button>
-            </template>
-            <template v-else>{{ message.content }}</template>
-            <el-button
-              v-if="canRecall(message)"
-              class="recall-button"
-              size="small"
-              link
-              @click="recall(message)"
-            >
-              撤回
-            </el-button>
-          </div>
-        </article>
+        <template v-for="item in displayMessages" :key="item.id">
+          <div v-if="item.type === 'time'" class="time-separator">{{ item.text }}</div>
+          <article
+            v-else
+            class="message-row"
+            :class="{ mine: item.data.senderId === auth.user?.id }"
+          >
+            <div class="bubble">
+              <div class="message-meta">{{ item.data.senderName }} · {{ formatTime(item.data.createTime) }}</div>
+              <template v-if="item.data.recalled">
+                <em>消息已撤回</em>
+              </template>
+              <template v-else-if="item.data.messageType === 'IMAGE'">
+                <img v-if="filePreviews[item.data.fileId]" class="chat-image" :src="filePreviews[item.data.fileId]" alt="图片消息" />
+                <div>{{ item.data.content }}</div>
+                <el-button size="small" @click="downloadFile(item.data.fileId)">下载</el-button>
+              </template>
+              <template v-else-if="item.data.messageType === 'FILE'">
+                <div class="file-message">{{ item.data.content }}</div>
+                <el-button size="small" @click="downloadFile(item.data.fileId)">下载文件</el-button>
+              </template>
+              <template v-else>{{ item.data.content }}</template>
+              <el-button
+                v-if="canRecall(item.data)"
+                class="recall-button"
+                size="small"
+                link
+                @click="recall(item.data)"
+              >
+                撤回
+              </el-button>
+            </div>
+          </article>
+        </template>
       </div>
 
       <footer class="composer">
@@ -199,6 +197,14 @@
       <el-form label-width="72px">
         <el-form-item label="群名"><el-input v-model="newGroup.name" /></el-form-item>
         <el-form-item label="简介"><el-input v-model="newGroup.description" type="textarea" /></el-form-item>
+        <el-form-item label="邀请">
+          <el-checkbox-group v-model="newGroup.memberIds" class="friend-check-list">
+            <el-checkbox v-for="friend in friends" :key="friend.id" :label="friend.id">
+              {{ friend.remark || friend.nickname }}（{{ friend.username }}）
+            </el-checkbox>
+          </el-checkbox-group>
+          <el-empty v-if="!friends.length" description="暂无好友可邀请" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="groupDialog = false">取消</el-button>
@@ -233,23 +239,47 @@ const keyword = ref('')
 const activeTarget = ref(null)
 const connected = ref(false)
 const stomp = ref(null)
+const messageListRef = ref(null)
 const filePreviews = reactive({})
 const addFriendDialog = ref(false)
 const requestDialog = ref(false)
 const groupDialog = ref(false)
-const joinGroupId = ref('')
 const searchKeyword = ref('')
 const searchResults = ref([])
 const receivedRequests = ref([])
 const sentRequests = ref([])
-const newGroup = reactive({ name: '', description: '' })
+const newGroup = reactive({ name: '', description: '', memberIds: [] })
 const profile = reactive({ nickname: '', avatarUrl: '', bio: '' })
 const password = reactive({ oldPassword: '', newPassword: '' })
 const metrics = reactive({ onlineCount: 0, todayMessageCount: 0, todayNewUserCount: 0 })
 const adminUsers = ref([])
+const TIME_GAP = 5 * 60 * 1000
 
 const activeTitle = computed(() => activeTarget.value ? activeTarget.value.name : '聊天主界面')
-const orderedMessages = computed(() => [...messages.value].sort((a, b) => new Date(a.createTime) - new Date(b.createTime)))
+const orderedMessages = computed(() => sortMessages(messages.value))
+const displayMessages = computed(() => {
+  const result = []
+  const sorted = orderedMessages.value
+  for (let i = 0; i < sorted.length; i += 1) {
+    const message = sorted[i]
+    const currentTime = normalizeMessageTime(message)
+    const previous = sorted[i - 1]
+    const previousTime = previous ? normalizeMessageTime(previous) : 0
+    if (i === 0 || currentTime - previousTime > TIME_GAP) {
+      result.push({
+        type: 'time',
+        id: `time-${getMessageKey(message)}`,
+        text: formatMessageTime(currentTime)
+      })
+    }
+    result.push({
+      type: 'message',
+      id: `message-${getMessageKey(message)}`,
+      data: message
+    })
+  }
+  return result
+})
 const activeGroupOwner = computed(() => activeTarget.value?.type === 'GROUP' && activeTarget.value.ownerId === auth.user?.id)
 
 onMounted(async () => {
@@ -307,10 +337,10 @@ async function handleIncoming(message) {
 }
 
 function upsertMessage(message) {
-  const index = messages.value.findIndex((item) => item.messageId === message.messageId)
-  if (index >= 0) messages.value[index] = message
-  else if (isForActive(message)) messages.value.push(message)
-  nextTick(() => document.querySelector('.message-list')?.scrollTo({ top: 999999 }))
+  if (isForActive(message)) {
+    messages.value = mergeMessages(messages.value, [message])
+  }
+  scrollToBottom()
 }
 
 function isForActive(message) {
@@ -346,12 +376,14 @@ async function openGroup(group) {
 
 async function loadHistory() {
   if (!activeTarget.value) return
+  const shouldScrollToBottom = page.value === 1
   const params = { page: page.value, size: 20, keyword: keyword.value }
   const data = activeTarget.value.type === 'PRIVATE'
     ? await messagesApi.privateHistory(activeTarget.value.id, params)
     : await messagesApi.groupHistory(activeTarget.value.id, params)
-  messages.value = page.value === 1 ? data : [...messages.value, ...data]
+  messages.value = mergeMessages(page.value === 1 ? [] : messages.value, data)
   for (const message of messages.value) await ensurePreview(message)
+  if (shouldScrollToBottom) scrollToBottom()
 }
 
 async function loadMore() {
@@ -368,6 +400,7 @@ function sendText() {
     stomp.value.publish({ destination: '/app/chat.group', body: JSON.stringify({ ...payload, groupId: activeTarget.value.id }) })
   }
   draft.value = ''
+  scrollToBottom()
 }
 
 async function uploadAndSend(file) {
@@ -383,6 +416,7 @@ async function uploadAndSend(file) {
   } else if (activeTarget.value?.type === 'GROUP') {
     stomp.value.publish({ destination: '/app/chat.group', body: JSON.stringify({ ...payload, groupId: activeTarget.value.id }) })
   }
+  scrollToBottom()
   return false
 }
 
@@ -409,11 +443,13 @@ async function downloadFile(id) {
 }
 
 function canRecall(message) {
-  return message.senderId === auth.user?.id && !message.recalled && Date.now() - new Date(message.createTime).getTime() < 120000
+  return message.senderId === auth.user?.id && !message.recalled && Date.now() - normalizeMessageTime(message) < 120000
 }
 
 async function recall(message) {
-  await messagesApi.recall(message.messageId)
+  const recalled = await messagesApi.recall(message.messageId)
+  messages.value = mergeMessages(messages.value, [recalled])
+  scrollToBottom()
 }
 
 function openAddFriend() {
@@ -446,20 +482,29 @@ async function rejectRequest(id) {
   await loadRequests()
 }
 
-async function createGroup() {
-  const group = await groupsApi.create(newGroup)
-  groups.value.unshift(group)
-  subscribeGroup(group.id)
-  groupDialog.value = false
-  newGroup.name = ''
-  newGroup.description = ''
+async function openGroupDialog() {
+  await reloadBadges()
+  groupDialog.value = true
 }
 
-async function joinGroup() {
-  if (!joinGroupId.value) return
-  await groupsApi.join(joinGroupId.value)
-  joinGroupId.value = ''
-  await reloadBadges()
+async function createGroup() {
+  const group = await groupsApi.create({
+    name: newGroup.name,
+    description: newGroup.description,
+    memberIds: newGroup.memberIds
+  })
+  groups.value = await groupsApi.list()
+  subscribeGroup(group.id)
+  groupDialog.value = false
+  activeTarget.value = { type: 'GROUP', id: group.id, name: group.name, ownerId: group.ownerId }
+  rightTab.value = 'members'
+  page.value = 1
+  await loadHistory()
+  members.value = await groupsApi.members(group.id)
+  newGroup.name = ''
+  newGroup.description = ''
+  newGroup.memberIds = []
+  ElMessage.success('创建群聊成功')
 }
 
 async function leaveGroup() {
@@ -521,6 +566,82 @@ async function handleLogout() {
 }
 
 function formatTime(value) {
-  return value ? new Date(value).toLocaleString() : ''
+  const time = normalizeMessageTime({ createTime: value })
+  return time ? new Date(time).toLocaleString() : ''
+}
+
+function formatMessageTime(time) {
+  if (!time) return ''
+  const date = new Date(time)
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const startOfMessageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const clock = `${date.getHours()}:${minutes}`
+  if (startOfMessageDay === startOfToday) return `今天 ${clock}`
+  if (startOfMessageDay === startOfToday - 24 * 60 * 60 * 1000) return `昨天 ${clock}`
+  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日 ${clock}`
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${clock}`
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    const el = messageListRef.value
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  })
+}
+
+function normalizeMessageTime(message) {
+  const raw = message?.createTime || message?.createdAt || message?.time
+  if (!raw) return Date.now()
+  if (typeof raw === 'number') return raw
+  const normalized = String(raw).includes('T') ? String(raw) : String(raw).replace(' ', 'T')
+  const time = new Date(normalized).getTime()
+  return Number.isNaN(time) ? Date.now() : time
+}
+
+function getMessageId(message) {
+  const id = Number(message?.messageId || message?.id || 0)
+  return Number.isNaN(id) ? 0 : id
+}
+
+function normalizeMessage(message) {
+  const nowIso = new Date().toISOString()
+  const id = message?.messageId || message?.id || message?.tempId || message?.clientTempId
+  return {
+    ...message,
+    messageId: id || `temp-${Date.now()}-${Math.random()}`,
+    createTime: message?.createTime || message?.createdAt || message?.time || nowIso
+  }
+}
+
+function getMessageKey(message) {
+  return String(
+    message?.messageId ||
+    message?.id ||
+    message?.tempId ||
+    message?.clientTempId ||
+    `${message?.senderId || 'unknown'}-${message?.receiverId || message?.groupId || 'target'}-${message?.createTime || ''}-${message?.content || ''}`
+  )
+}
+
+function sortMessages(list) {
+  return [...list].sort((a, b) => {
+    const ta = normalizeMessageTime(a)
+    const tb = normalizeMessageTime(b)
+    if (ta !== tb) return ta - tb
+    return getMessageId(a) - getMessageId(b)
+  })
+}
+
+function mergeMessages(oldList, newList) {
+  const map = new Map()
+  for (const raw of [...oldList, ...newList]) {
+    const message = normalizeMessage(raw)
+    map.set(getMessageKey(message), message)
+  }
+  return sortMessages([...map.values()])
 }
 </script>

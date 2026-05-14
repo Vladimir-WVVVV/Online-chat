@@ -27,6 +27,16 @@ curl -X POST http://localhost:8080/api/friends/requests \
   -d '{"toUserId":2,"message":"请求添加好友"}'
 ```
 
+创建群聊并邀请好友：
+```bash
+curl -X POST http://localhost:8080/api/groups \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"test","description":"课程演示群","memberIds":[2,3]}'
+```
+
+前端手动验收时，Alice 点击“创建群聊”，输入群名 `test`，勾选 Bob 和 Carol；Bob、Carol 重新登录或刷新后应能在群聊列表看到 `test`。
+
 管理员接口普通用户应被拒绝：
 ```bash
 curl http://localhost:8080/api/admin/users -H "Authorization: Bearer $ALICE_TOKEN"
