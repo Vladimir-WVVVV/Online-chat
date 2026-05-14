@@ -10,8 +10,7 @@ public record UserVO(
     String avatarUrl,
     String bio,
     String status,
-    String role,
-    Boolean banned
+    String role
 ) {
     public static UserVO from(User user) {
         return new UserVO(
@@ -22,9 +21,7 @@ public record UserVO(
             user.getAvatarUrl(),
             user.getBio(),
             user.getStatus(),
-            user.getRole(),
-            user.getBanned()
+            user.getRole()
         );
     }
 }
-

@@ -35,7 +35,6 @@ public class OnlineChatApplication {
                     user.setNickname(seed.nickname());
                     user.setRole(seed.role());
                     user.setStatus("OFFLINE");
-                    user.setBanned(false);
                     user.setPasswordHash(passwordEncoder.encode("123456"));
                     userMapper.insert(user);
                 }
@@ -46,4 +45,3 @@ public class OnlineChatApplication {
     private record SeedUser(String username, String email, String nickname, String role) {
     }
 }
-

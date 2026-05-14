@@ -40,7 +40,6 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole("USER");
         user.setStatus("OFFLINE");
-        user.setBanned(false);
         userMapper.insert(user);
         return UserVO.from(user);
     }
@@ -49,9 +48,6 @@ public class AuthService {
         User user = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, request.username()));
         if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BadCredentialsException("用户名或密码错误");
-        }
-        if (Boolean.TRUE.equals(user.getBanned())) {
-            throw new BadCredentialsException("账号已被封禁");
         }
         String token = jwtService.generate(new CurrentUser(user.getId(), user.getUsername(), user.getRole()));
         return new LoginVO(token, UserVO.from(user));
@@ -65,4 +61,3 @@ public class AuthService {
         return UserVO.from(user);
     }
 }
-

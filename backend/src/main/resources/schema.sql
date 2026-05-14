@@ -1,130 +1,109 @@
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS `user` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  username VARCHAR(50) NOT NULL UNIQUE,
-  email VARCHAR(120) NOT NULL UNIQUE,
+  username VARCHAR(50) NOT NULL,
+  email VARCHAR(120) NOT NULL,
   password_hash VARCHAR(100) NOT NULL,
   nickname VARCHAR(50) NOT NULL,
   avatar_url VARCHAR(500),
   bio VARCHAR(500),
   status VARCHAR(20) NOT NULL DEFAULT 'OFFLINE',
   role VARCHAR(20) NOT NULL DEFAULT 'USER',
-  banned TINYINT NOT NULL DEFAULT 0,
-  deleted TINYINT NOT NULL DEFAULT 0,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_users_username (username),
-  INDEX idx_users_email (email)
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_user_username (username),
+  UNIQUE KEY uk_user_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS friendships (
+CREATE TABLE IF NOT EXISTS `friendship` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT NOT NULL,
   friend_id BIGINT NOT NULL,
   remark VARCHAR(50),
-  deleted TINYINT NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_friendship (user_id, friend_id),
-  INDEX idx_friendships_user (user_id),
-  INDEX idx_friendships_friend (friend_id)
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_friendship_user_friend (user_id, friend_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS friend_requests (
+CREATE TABLE IF NOT EXISTS `friend_request` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   from_user_id BIGINT NOT NULL,
   to_user_id BIGINT NOT NULL,
-  message VARCHAR(255),
   status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-  deleted TINYINT NOT NULL DEFAULT 0,
+  message VARCHAR(255),
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_friend_requests_to (to_user_id, status),
-  INDEX idx_friend_requests_from (from_user_id)
+  INDEX idx_friend_request_from_to_status (from_user_id, to_user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS chat_groups (
+CREATE TABLE IF NOT EXISTS `chat_group` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(80) NOT NULL,
-  description VARCHAR(500),
   owner_id BIGINT NOT NULL,
-  deleted TINYINT NOT NULL DEFAULT 0,
+  avatar_url VARCHAR(500),
+  description VARCHAR(500),
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS group_members (
+CREATE TABLE IF NOT EXISTS `group_member` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   group_id BIGINT NOT NULL,
   user_id BIGINT NOT NULL,
   role VARCHAR(20) NOT NULL DEFAULT 'MEMBER',
+  joined_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted TINYINT NOT NULL DEFAULT 0,
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_group_member (group_id, user_id),
-  INDEX idx_group_members_group (group_id),
-  INDEX idx_group_members_user (user_id)
+  UNIQUE KEY uk_group_member_group_user (group_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE IF NOT EXISTS `message` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  conversation_id VARCHAR(80) NOT NULL,
-  message_type VARCHAR(20) NOT NULL,
+  conversation_type VARCHAR(20) NOT NULL,
   sender_id BIGINT NOT NULL,
   receiver_id BIGINT,
   group_id BIGINT,
   content TEXT,
-  attachment_id BIGINT,
+  message_type VARCHAR(20) NOT NULL DEFAULT 'TEXT',
+  file_id BIGINT,
   recalled TINYINT NOT NULL DEFAULT 0,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted TINYINT NOT NULL DEFAULT 0,
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_messages_conversation (conversation_id, create_time),
-  INDEX idx_messages_group (group_id, create_time),
-  INDEX idx_messages_sender (sender_id)
+  INDEX idx_message_sender (sender_id),
+  INDEX idx_message_receiver (receiver_id),
+  INDEX idx_message_group (group_id),
+  INDEX idx_message_create_time (create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS message_read_receipts (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  message_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
-  read_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_receipt (message_id, user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS file_attachments (
+CREATE TABLE IF NOT EXISTS `file_record` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   uploader_id BIGINT NOT NULL,
   original_name VARCHAR(255) NOT NULL,
   stored_name VARCHAR(255) NOT NULL,
-  content_type VARCHAR(120),
-  size BIGINT NOT NULL,
-  path VARCHAR(500) NOT NULL,
-  deleted TINYINT NOT NULL DEFAULT 0,
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  file_path VARCHAR(500) NOT NULL,
+  file_size BIGINT NOT NULL,
+  mime_type VARCHAR(120),
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS ai_agents (
+CREATE TABLE IF NOT EXISTS `notification` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  code VARCHAR(50) NOT NULL UNIQUE,
-  name VARCHAR(50) NOT NULL,
-  description VARCHAR(255),
-  enabled TINYINT NOT NULL DEFAULT 1,
+  receiver_id BIGINT NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  content VARCHAR(500) NOT NULL,
+  read_flag TINYINT NOT NULL DEFAULT 0,
   create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  INDEX idx_notification_receiver_read (receiver_id, read_flag)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS admin_logs (
+CREATE TABLE IF NOT EXISTS `admin_log` (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   admin_id BIGINT NOT NULL,
-  action VARCHAR(80) NOT NULL,
-  target_id BIGINT,
-  detail VARCHAR(500),
-  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_admin_logs_admin (admin_id),
-  INDEX idx_admin_logs_action (action)
+  operation_type VARCHAR(80) NOT NULL,
+  target_user_id BIGINT,
+  content VARCHAR(500),
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-

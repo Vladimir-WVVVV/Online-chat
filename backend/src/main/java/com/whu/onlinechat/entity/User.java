@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 @Data
-@TableName("users")
+@TableName("`user`")
 public class User {
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -20,10 +20,8 @@ public class User {
     private String bio;
     private String status;
     private String role;
-    private Boolean banned;
     @TableLogic
     private Integer deleted;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
-
