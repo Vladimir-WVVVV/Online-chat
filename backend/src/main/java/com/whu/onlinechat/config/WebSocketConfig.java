@@ -2,6 +2,8 @@ package com.whu.onlinechat.config;
 
 import com.whu.onlinechat.security.CurrentUser;
 import com.whu.onlinechat.security.JwtService;
+import com.whu.onlinechat.entity.User;
+import com.whu.onlinechat.mapper.UserMapper;
 import com.whu.onlinechat.websocket.UserPrincipal;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final JwtService jwtService;
+    private final UserMapper userMapper;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -52,6 +55,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         throw new IllegalArgumentException("WebSocket token 缺失");
                     }
                     CurrentUser user = jwtService.parse(header.substring(7));
+                    User entity = userMapper.selectById(user.id());
+                    if (entity == null) {
+                        throw new IllegalArgumentException("WebSocket 用户不存在");
+                    }
+                    if ("BANNED".equals(entity.getStatus())) {
+                        throw new IllegalArgumentException("账号已被封禁");
+                    }
                     accessor.setUser(new UserPrincipal(user.id(), user.username(), user.role()));
                     Objects.requireNonNull(accessor.getSessionAttributes()).put("userId", user.id());
                 }

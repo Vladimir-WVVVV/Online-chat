@@ -106,6 +106,7 @@ public class MessageService {
 
     @Transactional
     public MessageVO recall(Long userId, Long messageId) {
+        userService.requireActiveUser(userId);
         Message message = messageMapper.selectById(messageId);
         if (message == null || !userId.equals(message.getSenderId())) {
             throw new BizException("消息不存在或无权撤回");
@@ -130,10 +131,12 @@ public class MessageService {
     }
 
     public void readPrivate(Long userId, Long friendId) {
+        userService.requireActiveUser(userId);
         notificationService.readByTypeAndKeyword(userId, "PRIVATE_MESSAGE", "用户 " + friendId + " ");
     }
 
     public void readGroup(Long userId, Long groupId) {
+        userService.requireActiveUser(userId);
         notificationService.readByTypeAndKeyword(userId, "GROUP_MESSAGE", "群 " + groupId + " ");
     }
 
