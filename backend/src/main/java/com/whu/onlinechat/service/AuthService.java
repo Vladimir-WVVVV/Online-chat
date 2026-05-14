@@ -49,6 +49,9 @@ public class AuthService {
         if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new BadCredentialsException("用户名或密码错误");
         }
+        if ("BANNED".equals(user.getStatus())) {
+            throw new BizException("账号已被封禁");
+        }
         String token = jwtService.generate(new CurrentUser(user.getId(), user.getUsername(), user.getRole()));
         return new LoginVO(token, UserVO.from(user));
     }

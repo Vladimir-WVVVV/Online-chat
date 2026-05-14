@@ -3,66 +3,39 @@
 武汉大学软件工程课程实验项目：PC 端在线聊天平台 OnlineChat。
 
 ## 技术栈
+- 后端：Java 17、Spring Boot 3、Spring Security、MyBatis-Plus、MySQL、Redis、JWT、Swagger、STOMP WebSocket
+- 前端：Vue 3、Electron、Vite、Element Plus、Pinia、Vue Router、Axios、STOMP
 
-- 后端：Java 17, Spring Boot 3, Spring Security, MyBatis-Plus, MySQL 8, Redis 7, JWT, Swagger
-- 前端：Electron, Vue 3, Vite, Element Plus, Pinia, Vue Router, Axios, STOMP over WebSocket
-- 部署：Docker Compose
+## 已完成功能
+- 登录、注册、JWT 鉴权、BCrypt、路由守卫
+- 用户资料、修改密码、封禁状态校验
+- 好友搜索、申请、接受/拒绝、备注、删除、在线状态和未读角标
+- STOMP 单聊、群聊、心跳、自动重连、多端消息推送、2 分钟内撤回
+- 私聊/群聊历史分页、关键词搜索
+- 图片和普通文件上传下载，20MB 限制，文件保存到 `backend/uploads/`
+- 通知中心、单条已读、全部已读
+- 管理员后台：用户列表、封禁/解封、在线人数、今日消息数、今日新增用户数、操作日志
 
-## 当前阶段
+## 数据库
+仍只使用 9 张核心表：
+`user`、`friendship`、`friend_request`、`chat_group`、`group_member`、`message`、`file_record`、`notification`、`admin_log`。
 
-已完成第 1-3 步的最小闭环：
-
-- monorepo 项目结构
-- Docker Compose 基础部署配置
-- Spring Boot 后端基础配置
-- 用户注册、登录、JWT 鉴权、BCrypt 密码加密
-- Swagger 接口文档
-- Vue/Electron 前端基础配置
-- 登录页、注册页、主界面占位页
-- 前端 token 持久化、Axios 自动携带 `Authorization: Bearer xxx`
-- 路由守卫：未登录不能进入主界面
-
-## 演示账号
-
-首次启动后端会自动创建：
-
-| 账号 | 密码 | 角色 |
-| --- | --- | --- |
-| admin | 123456 | 管理员 |
-| alice | 123456 | 普通用户 |
-| bob | 123456 | 普通用户 |
-| carol | 123456 | 普通用户 |
+本轮未实现 AI、电话、语音连麦、WebRTC，也未新增相关表。
 
 ## 快速运行
-
-启动依赖：
-
 ```bash
-cd onlinechat/deploy
+cd deploy
 docker compose up -d mysql redis
-```
 
-启动后端：
-
-```bash
-cd onlinechat/backend
+cd ../backend
 mvn spring-boot:run
-```
 
-启动前端：
-
-```bash
-cd onlinechat/frontend
-npm install
+cd ../frontend
 npm run dev
 ```
 
-Electron 客户端：
+Swagger: <http://localhost:8080/swagger-ui.html>
 
-```bash
-cd onlinechat/frontend
-npm run electron:dev
-```
+测试账号：`alice / 123456`、`bob / 123456`、`carol / 123456`、`admin / 123456`。
 
-Swagger 地址：<http://localhost:8080/swagger-ui/index.html>
-
+更多说明见 `docs/RUN_GUIDE.md`、`docs/API.md`、`docs/DEMO_SCRIPT.md`。

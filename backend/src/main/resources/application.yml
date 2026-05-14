@@ -18,6 +18,10 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
       password: ${SPRING_DATA_REDIS_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
 
 mybatis-plus:
   configuration:
@@ -40,4 +44,3 @@ springdoc:
 logging:
   level:
     com.whu.onlinechat: info
-
