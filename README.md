@@ -59,4 +59,4 @@ Swagger: <http://localhost:8080/swagger-ui.html>
 
 测试账号：`alice / 123456`、`bob / 123456`、`carol / 123456`、`admin / 123456`。
 
-更多说明见 `docs/RUN_GUIDE.md`、`docs/API.md`、`docs/DEMO_SCRIPT.md`。
+更多说明见 `docs/RUN_GUIDE.md`、`docs/API.md`、`docs/DEMO_SCRIPT.md`、`docs/VOICE_CHAT_TECH_REPORT.md`。

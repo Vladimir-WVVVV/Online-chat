@@ -73,6 +73,7 @@ onlinechat/
     ├── DEMO_SCRIPT.md
     ├── RUN_GUIDE.md
     ├── TEST_GUIDE.md
+    ├── VOICE_CHAT_TECH_REPORT.md
     └── PROJECT_OVERVIEW.md
 ```
 
