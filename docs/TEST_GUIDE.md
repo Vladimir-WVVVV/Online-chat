@@ -49,4 +49,24 @@ curl -X POST http://localhost:8080/api/files/upload \
   -F "file=@./demo.png"
 ```
 
-课堂演示优先使用前端界面完成好友、私聊、群聊、撤回、文件、通知和管理员后台流程。
+AI Mock 调用：
+```bash
+curl -X POST http://localhost:8080/api/ai/chat \
+  -H "Authorization: Bearer $ALICE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"conversationType":"PRIVATE","targetId":2,"agentType":"QA","content":"WebSocket 是什么"}'
+```
+
+语音手动验收：
+- Alice 和 Bob 必须是好友并同时在线。
+- Alice 打开 Bob 私聊，点击“语音”。
+- Bob 收到来电弹窗后接听，双方显示“通话中”。
+- 任一方点击挂断后状态结束。
+- 再测试 Bob 拒绝来电，Alice 显示“对方拒绝”。
+
+当前补充的自动测试包括：
+- AI Mock 回复测试。
+- 语音 DTO 基础测试。
+- 非好友不能发起语音测试。
+
+课堂演示优先使用前端界面完成好友、私聊、群聊、撤回、文件、AI、语音、通知和管理员后台流程。

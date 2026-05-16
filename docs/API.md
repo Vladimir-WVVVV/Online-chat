@@ -42,6 +42,24 @@
 - `POST /api/files/upload`，multipart 字段名 `file`，单文件 20MB
 - `GET /api/files/{id}/download`
 
+## AI
+所有 AI 接口需要 JWT，封禁用户不可调用。AI 默认 Mock 模式；回复保存为普通 `message`，`messageType=TEXT`，`senderName` 为 `答疑助手/总结助手/氛围助手`。
+
+- `POST /api/ai/chat`
+  body: `{ "conversationType": "PRIVATE", "targetId": 2, "agentType": "QA", "content": "帮我解释 WebSocket" }`
+- `POST /api/ai/summary`
+  body: `{ "conversationType": "GROUP", "targetId": 1 }`
+- `POST /api/ai/mood`
+  body: `{ "conversationType": "PRIVATE", "targetId": 2 }`
+
+AI Provider 环境变量：
+- `AI_PROVIDER=mock/http`
+- `AI_API_BASE_URL=`
+- `AI_API_KEY=`
+- `AI_MODEL=`
+
+不要提交真实 API Key。`AI_PROVIDER=http` 且 Key 或请求不可用时自动降级 Mock。
+
 ## 通知
 - `GET /api/notifications`
 - `GET /api/notifications/unread-count`
@@ -64,9 +82,33 @@
 - `/app/chat.recall`
 - `/app/read.private`
 - `/app/read.group`
+- `/app/voice.call`
+- `/app/voice.accept`
+- `/app/voice.reject`
+- `/app/voice.offer`
+- `/app/voice.answer`
+- `/app/voice.ice`
+- `/app/voice.hangup`
 
 客户端订阅：
 - `/user/queue/messages`
 - `/user/queue/notifications`
+- `/user/queue/voice`
 - `/topic/groups/{groupId}`
 - `/topic/online`
+
+语音信令结构：
+```json
+{
+  "type": "CALL",
+  "fromUserId": 1,
+  "toUserId": 2,
+  "fromUsername": "alice",
+  "targetUserId": 2,
+  "sdp": "...",
+  "candidate": {},
+  "timestamp": "2026-05-16T10:00:00"
+}
+```
+
+语音信令只转发不入库；只能给好友发送，封禁用户不能发起或响应，对方离线时通过 `/user/queue/voice` 返回 `ERROR`。

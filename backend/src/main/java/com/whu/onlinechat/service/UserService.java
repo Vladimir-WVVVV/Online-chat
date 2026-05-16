@@ -55,6 +55,7 @@ public class UserService {
         String text = keyword == null ? "" : keyword.trim();
         return userMapper.selectList(new LambdaQueryWrapper<User>()
                 .ne(User::getId, currentUserId)
+                .ne(User::getRole, "AI")
                 .and(!text.isBlank(), w -> w.like(User::getUsername, text).or().like(User::getNickname, text))
                 .last("limit 20"))
             .stream().map(UserVO::from).toList();

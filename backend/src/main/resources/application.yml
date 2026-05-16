@@ -37,6 +37,12 @@ onlinechat:
     secret: ${JWT_SECRET:change-this-development-secret-to-at-least-32-characters}
     expire-minutes: ${JWT_EXPIRE_MINUTES:1440}
 
+ai:
+  provider: ${AI_PROVIDER:mock}
+  api-base-url: ${AI_API_BASE_URL:}
+  api-key: ${AI_API_KEY:}
+  model: ${AI_MODEL:}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html

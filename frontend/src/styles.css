@@ -224,6 +224,15 @@ body {
   border-color: #bfdbfe;
 }
 
+.message-row.ai {
+  justify-content: flex-start;
+}
+
+.message-row.ai .bubble {
+  background: #f2f5ff;
+  border-color: #c7d2fe;
+}
+
 .message-meta {
   color: #64748b;
   font-size: 12px;
@@ -263,6 +272,32 @@ body {
   grid-template-columns: auto 1fr auto;
   gap: 12px;
   align-items: start;
+}
+
+.composer-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.voice-floating {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30;
+  min-width: 220px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 8px;
+}
+
+.voice-floating span {
+  color: #475569;
 }
 
 .side-section {

@@ -71,7 +71,7 @@
           <article
             v-else
             class="message-row"
-            :class="{ mine: item.data.senderId === auth.user?.id }"
+            :class="{ mine: item.data.senderId === auth.user?.id, ai: isAiMessage(item.data) }"
           >
             <div class="bubble">
               <div class="message-meta">{{ item.data.senderName }} · {{ formatTime(item.data.createTime) }}</div>
@@ -103,9 +103,15 @@
       </div>
 
       <footer class="composer">
-        <el-upload :show-file-list="false" :before-upload="uploadAndSend">
-          <el-button>文件</el-button>
-        </el-upload>
+        <div class="composer-tools">
+          <el-upload :show-file-list="false" :before-upload="uploadAndSend">
+            <el-button>文件</el-button>
+          </el-upload>
+          <el-button :disabled="!canStartVoice" @click="startVoiceCall">语音</el-button>
+          <el-button :disabled="!activeTarget || aiLoading" @click="prepareAiQuestion">AI答疑</el-button>
+          <el-button :disabled="!activeTarget || aiLoading" @click="callAi('SUMMARY')">总结</el-button>
+          <el-button :disabled="!activeTarget || aiLoading" @click="callAi('MOOD')">氛围助手</el-button>
+        </div>
         <el-input v-model="draft" type="textarea" :rows="3" :disabled="!activeTarget" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="sendText" />
         <el-button type="primary" :disabled="!activeTarget || !draft.trim()" @click="sendText">发送</el-button>
       </footer>
@@ -211,6 +217,20 @@
         <el-button type="primary" @click="createGroup">创建</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="incomingCall.visible" title="语音来电" width="360px" :close-on-click-modal="false">
+      <p>{{ incomingCall.fromUsername || '好友' }} 邀请你语音通话</p>
+      <template #footer>
+        <el-button @click="rejectIncomingCall">拒绝</el-button>
+        <el-button type="primary" @click="acceptIncomingCall">接听</el-button>
+      </template>
+    </el-dialog>
+
+    <div v-if="voice.visible" class="voice-floating">
+      <strong>{{ voice.peerName || '语音通话' }}</strong>
+      <span>{{ voice.status }}</span>
+      <el-button size="small" type="danger" @click="hangupVoice">挂断</el-button>
+    </div>
   </main>
 </template>
 
@@ -220,8 +240,9 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import http from '../api/http'
-import { adminApi, filesApi, friendsApi, groupsApi, messagesApi, notificationsApi, usersApi } from '../api/modules'
+import { adminApi, aiApi, filesApi, friendsApi, groupsApi, messagesApi, notificationsApi, usersApi } from '../api/modules'
 import { useAuthStore } from '../stores/auth'
+import { createVoiceService } from '../voice/voiceService'
 import { createStompClient } from '../websocket/client'
 
 const router = useRouter()
@@ -253,9 +274,14 @@ const profile = reactive({ nickname: '', avatarUrl: '', bio: '' })
 const password = reactive({ oldPassword: '', newPassword: '' })
 const metrics = reactive({ onlineCount: 0, todayMessageCount: 0, todayNewUserCount: 0 })
 const adminUsers = ref([])
+const aiLoading = ref(false)
+const voice = reactive({ visible: false, status: '已挂断', peerId: null, peerName: '' })
+const incomingCall = reactive({ visible: false, fromUserId: null, fromUsername: '' })
+let voiceService = null
 const TIME_GAP = 5 * 60 * 1000
 
 const activeTitle = computed(() => activeTarget.value ? activeTarget.value.name : '聊天主界面')
+const canStartVoice = computed(() => activeTarget.value?.type === 'PRIVATE' && stomp.value?.connected)
 const orderedMessages = computed(() => sortMessages(messages.value))
 const displayMessages = computed(() => {
   const result = []
@@ -290,6 +316,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (stomp.value) stomp.value.deactivate()
+  voiceService?.cleanup()
 })
 
 async function reloadAll() {
@@ -304,6 +331,7 @@ function connectSocket() {
     onConnect: () => {
       connected.value = true
       stomp.value.subscribe('/user/queue/messages', (frame) => handleIncoming(JSON.parse(frame.body)))
+      stomp.value.subscribe('/user/queue/voice', (frame) => voiceService?.handleSignal(JSON.parse(frame.body)))
       stomp.value.subscribe('/user/queue/notifications', async (frame) => {
         notifications.value.unshift(JSON.parse(frame.body))
         await reloadBadges()
@@ -314,6 +342,12 @@ function connectSocket() {
     },
     onDisconnect: () => { connected.value = false },
     onError: () => { connected.value = false }
+  })
+  voiceService = createVoiceService({
+    getStomp: () => stomp.value,
+    getCurrentUser: () => auth.user,
+    onSignal: handleVoiceSignal,
+    onStatus: updateVoiceStatus
   })
   stomp.value.activate()
 }
@@ -346,7 +380,10 @@ function upsertMessage(message) {
 function isForActive(message) {
   if (!activeTarget.value) return false
   if (activeTarget.value.type === 'GROUP') return message.groupId === activeTarget.value.id
-  return message.conversationType === 'PRIVATE' && (message.senderId === activeTarget.value.id || message.receiverId === activeTarget.value.id)
+  return message.conversationType === 'PRIVATE'
+    && (message.senderId === activeTarget.value.id
+      || message.receiverId === activeTarget.value.id
+      || (isAiMessage(message) && message.receiverId === auth.user?.id && message.groupId === activeTarget.value.id))
 }
 
 async function reloadBadges() {
@@ -391,8 +428,12 @@ async function loadMore() {
   await loadHistory()
 }
 
-function sendText() {
+async function sendText() {
   if (!draft.value.trim() || !activeTarget.value || !stomp.value?.connected) return
+  if (await tryAiCommand(draft.value.trim())) {
+    draft.value = ''
+    return
+  }
   const payload = { content: draft.value.trim(), messageType: 'TEXT' }
   if (activeTarget.value.type === 'PRIVATE') {
     stomp.value.publish({ destination: '/app/chat.private', body: JSON.stringify({ ...payload, receiverId: activeTarget.value.id }) })
@@ -401,6 +442,143 @@ function sendText() {
   }
   draft.value = ''
   scrollToBottom()
+}
+
+async function tryAiCommand(text) {
+  if (text.startsWith('@AI ') || text.startsWith('@答疑助手 ')) {
+    const content = text.replace(/^@(AI|答疑助手)\s+/, '').trim()
+    await callAi('QA', content)
+    return true
+  }
+  if (text === '/summary') {
+    await callAi('SUMMARY')
+    return true
+  }
+  if (text === '/mood') {
+    await callAi('MOOD')
+    return true
+  }
+  return false
+}
+
+function prepareAiQuestion() {
+  if (!activeTarget.value) return
+  if (!draft.value.trim()) {
+    draft.value = '@AI '
+    return
+  }
+  callAi('QA', draft.value.trim())
+  draft.value = ''
+}
+
+async function callAi(agentType, content = '') {
+  if (!activeTarget.value || aiLoading.value) return
+  if (agentType === 'QA' && !content.trim()) {
+    ElMessage.warning('请输入要提问的内容')
+    return
+  }
+  aiLoading.value = true
+  const loadingMessage = {
+    tempId: `ai-loading-${Date.now()}`,
+    conversationType: activeTarget.value.type,
+    senderId: -1,
+    senderName: 'AI 正在思考中...',
+    receiverId: activeTarget.value.type === 'PRIVATE' ? auth.user?.id : null,
+    groupId: activeTarget.value.id,
+    content: 'AI 正在思考中...',
+    messageType: 'TEXT',
+    createTime: new Date().toISOString(),
+    aiLoading: true
+  }
+  messages.value = mergeMessages(messages.value, [loadingMessage])
+  scrollToBottom()
+  try {
+    const payload = {
+      conversationType: activeTarget.value.type,
+      targetId: activeTarget.value.id,
+      agentType,
+      content
+    }
+    const response = agentType === 'SUMMARY'
+      ? await aiApi.summary(payload)
+      : agentType === 'MOOD'
+        ? await aiApi.mood(payload)
+        : await aiApi.chat(payload)
+    if (response?.message) {
+      upsertMessage(response.message)
+    }
+  } catch (error) {
+    ElMessage.error(error.message || 'AI 调用失败')
+  } finally {
+    messages.value = messages.value.filter((message) => message.tempId !== loadingMessage.tempId)
+    aiLoading.value = false
+  }
+}
+
+function isAiMessage(message) {
+  return ['答疑助手', '总结助手', '氛围助手'].includes(message?.senderName) || message?.aiLoading || message?.senderId === -1
+}
+
+async function startVoiceCall() {
+  if (!canStartVoice.value) {
+    ElMessage.warning('语音通话仅支持好友私聊')
+    return
+  }
+  try {
+    voice.visible = true
+    voice.peerId = activeTarget.value.id
+    voice.peerName = activeTarget.value.name
+    voice.status = '呼叫中'
+    await voiceService.startCall(activeTarget.value.id)
+  } catch (error) {
+    updateVoiceStatus(error.message || '连接失败')
+    ElMessage.error(error.message || '语音通话启动失败')
+  }
+}
+
+function handleVoiceSignal(signal) {
+  incomingCall.visible = true
+  incomingCall.fromUserId = signal.fromUserId
+  incomingCall.fromUsername = signal.fromUsername
+  voice.visible = true
+  voice.peerId = signal.fromUserId
+  voice.peerName = signal.fromUsername
+  voice.status = '来电中'
+}
+
+async function acceptIncomingCall() {
+  try {
+    incomingCall.visible = false
+    await voiceService.acceptCall(incomingCall.fromUserId)
+    updateVoiceStatus('通话中')
+  } catch (error) {
+    updateVoiceStatus(error.message || '连接失败')
+    ElMessage.error(error.message || '接听失败')
+  }
+}
+
+function rejectIncomingCall() {
+  voiceService.rejectCall(incomingCall.fromUserId)
+  incomingCall.visible = false
+  updateVoiceStatus('已挂断')
+}
+
+function hangupVoice() {
+  try {
+    voiceService.hangup(voice.peerId)
+  } catch (error) {
+    voiceService.cleanup()
+  }
+  updateVoiceStatus('已挂断')
+}
+
+function updateVoiceStatus(status) {
+  voice.status = status
+  if (['已挂断', '对方拒绝', '对方不在线或连接失败', '连接失败', '已拒绝'].includes(status)) {
+    setTimeout(() => {
+      if (voice.status === status) voice.visible = false
+    }, 1800)
+  }
 }
 
 async function uploadAndSend(file) {

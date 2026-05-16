@@ -37,6 +37,12 @@ export const messagesApi = {
   readGroup: (groupId) => http.post(`/messages/read/group/${groupId}`)
 }
 
+export const aiApi = {
+  chat: (payload) => http.post('/ai/chat', payload),
+  summary: (payload) => http.post('/ai/summary', payload),
+  mood: (payload) => http.post('/ai/mood', payload)
+}
+
 export const filesApi = {
   upload: (file) => {
     const form = new FormData()
