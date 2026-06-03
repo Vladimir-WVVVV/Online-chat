@@ -41,7 +41,7 @@ ai:
   provider: ${AI_PROVIDER:mock}
   api-base-url: ${AI_API_BASE_URL:}
   api-key: ${AI_API_KEY:}
-  model: ${AI_MODEL:}
+  model: ${AI_MODEL:glm-4.7-flash}
 
 springdoc:
   swagger-ui:

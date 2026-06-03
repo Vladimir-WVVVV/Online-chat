@@ -19,3 +19,8 @@ frontend/release/
 # Logs
 *.log
 
+.env
+*.env
+.env.*
+backend/.env
+backend/run-ai-local.sh

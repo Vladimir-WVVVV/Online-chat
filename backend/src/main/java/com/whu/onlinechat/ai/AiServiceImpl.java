@@ -13,6 +13,7 @@ import com.whu.onlinechat.vo.MessageVO;
 import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AiServiceImpl implements AiService {
     private final MockAiProvider mockAiProvider;
     private final HttpAiProvider httpAiProvider;
@@ -66,14 +68,26 @@ public class AiServiceImpl implements AiService {
     }
 
     private String callProvider(AiAgentType agentType, String content, List<String> recentMessages) {
-        if ("http".equalsIgnoreCase(provider)) {
-            try {
-                return httpAiProvider.chat(agentType, content, recentMessages);
-            } catch (Exception ignored) {
-                return mockAiProvider.chat(agentType, content, recentMessages);
-            }
+        log.info("AI invoke start: provider={}, model={}, baseUrlPresent={}, keyPresent={}",
+            provider, httpAiProvider.model(), httpAiProvider.baseUrlPresent(), httpAiProvider.keyPresent());
+        if (!useHttpProvider(provider)) {
+            log.info("AI fallback to mock, reason=provider is not http");
+            return mockAiProvider.chat(agentType, content, recentMessages);
         }
-        return mockAiProvider.chat(agentType, content, recentMessages);
+        if (!httpAiProvider.available()) {
+            log.warn("AI HTTP provider failed, fallback to mock, reason={}", httpAiProvider.unavailableReason());
+            return mockAiProvider.chat(agentType, content, recentMessages);
+        }
+        try {
+            return httpAiProvider.chat(agentType, content, recentMessages);
+        } catch (Exception ex) {
+            log.warn("AI HTTP provider failed, fallback to mock, reason={}", ex.getMessage());
+            return mockAiProvider.chat(agentType, content, recentMessages);
+        }
+    }
+
+    static boolean useHttpProvider(String provider) {
+        return "http".equalsIgnoreCase(provider == null ? "" : provider.trim());
     }
 
     private void validateConversation(Long userId, Long targetId, String conversationType) {
