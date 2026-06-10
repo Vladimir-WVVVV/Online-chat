@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -18,6 +19,7 @@ public class OnlineChatApplication {
     }
 
     @Bean
+    @ConditionalOnProperty(name = "onlinechat-demo.seed-users", havingValue = "true")
     CommandLineRunner seedUsers(UserMapper userMapper, PasswordEncoder passwordEncoder) {
         return args -> {
             List<SeedUser> seeds = List.of(

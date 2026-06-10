@@ -10,7 +10,7 @@ class HttpAiProviderTest {
     @Test
     void availableWhenHttpConfigIsComplete() {
         HttpAiProvider provider = new HttpAiProvider(new RestTemplate(), new ObjectMapper(),
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions", "test-key", "glm-5.1");
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions", "test-key", "glm-4.5-flash");
 
         assertThat(provider.available()).isTrue();
     }
@@ -18,7 +18,7 @@ class HttpAiProviderTest {
     @Test
     void unavailableWhenApiKeyMissing() {
         HttpAiProvider provider = new HttpAiProvider(new RestTemplate(), new ObjectMapper(),
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions", "", "glm-5.1");
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions", "", "glm-4.5-flash");
 
         assertThat(provider.available()).isFalse();
         assertThat(provider.unavailableReason()).isEqualTo("AI_API_KEY is empty");
@@ -27,7 +27,7 @@ class HttpAiProviderTest {
     @Test
     void parsesOpenAiCompatibleChatCompletionContent() {
         HttpAiProvider provider = new HttpAiProvider(new RestTemplate(), new ObjectMapper(),
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions", "test-key", "glm-5.1");
+            "https://open.bigmodel.cn/api/paas/v4/chat/completions", "test-key", "glm-4.5-flash");
 
         String content = provider.parseContent("""
             {

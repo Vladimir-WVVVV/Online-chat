@@ -2,6 +2,16 @@ import { ElMessage } from 'element-plus'
 
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }]
 
+export function getVoiceSupport() {
+  if (!window.isSecureContext) {
+    return { supported: false, message: '语音通话需要 HTTPS 或 localhost 环境支持麦克风权限' }
+  }
+  if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
+    return { supported: false, message: '当前浏览器不支持麦克风采集或 WebRTC' }
+  }
+  return { supported: true, message: '' }
+}
+
 export function createVoiceService({ getStomp, getCurrentUser, onSignal, onStatus }) {
   let peer = null
   let localStream = null
@@ -18,14 +28,15 @@ export function createVoiceService({ getStomp, getCurrentUser, onSignal, onStatu
 
   async function ensureLocalStream() {
     if (localStream) return localStream
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('当前环境不支持麦克风采集')
+    const support = getVoiceSupport()
+    if (!support.supported) {
+      throw new Error(support.message)
     }
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       return localStream
     } catch (error) {
-      throw new Error('麦克风权限被拒绝')
+      throw new Error(error?.name === 'NotAllowedError' ? '麦克风权限被拒绝，请在浏览器设置中允许访问' : '无法访问麦克风设备')
     }
   }
 

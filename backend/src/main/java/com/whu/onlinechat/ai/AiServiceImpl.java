@@ -111,7 +111,8 @@ public class AiServiceImpl implements AiService {
                 .eq(Message::getRecalled, 0)
                 .and(w -> w.eq(Message::getSenderId, userId).eq(Message::getReceiverId, targetId)
                     .or().eq(Message::getSenderId, targetId).eq(Message::getReceiverId, userId)
-                    .or().eq(Message::getReceiverId, userId).eq(Message::getGroupId, targetId))
+                    .or().eq(Message::getReceiverId, userId).eq(Message::getGroupId, targetId)
+                    .or().eq(Message::getReceiverId, targetId).eq(Message::getGroupId, userId))
                 .orderByDesc(Message::getCreateTime)
                 .last("limit 20"));
         } else {
@@ -147,9 +148,10 @@ public class AiServiceImpl implements AiService {
             message.setGroupId(targetId);
         }
         messageMapper.insert(message);
-        MessageVO vo = MessageVO.of(message, agentType.displayName());
+        MessageVO vo = MessageVO.of(message, agentType.displayName(), aiUser.getAvatarUrl());
         if ("PRIVATE".equals(conversationType)) {
             messagingTemplate.convertAndSendToUser(String.valueOf(userId), "/queue/messages", vo);
+            messagingTemplate.convertAndSendToUser(String.valueOf(targetId), "/queue/messages", vo);
         } else {
             messagingTemplate.convertAndSend("/topic/groups/" + targetId, vo);
         }

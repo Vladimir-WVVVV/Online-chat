@@ -75,7 +75,8 @@ public class MessageService {
                 .eq(Message::getConversationType, "PRIVATE")
                 .and(w -> w.eq(Message::getSenderId, userId).eq(Message::getReceiverId, friendId)
                     .or().eq(Message::getSenderId, friendId).eq(Message::getReceiverId, userId)
-                    .or().eq(Message::getReceiverId, userId).eq(Message::getGroupId, friendId))
+                    .or().eq(Message::getReceiverId, userId).eq(Message::getGroupId, friendId)
+                    .or().eq(Message::getReceiverId, friendId).eq(Message::getGroupId, userId))
                 .like(keyword != null && !keyword.isBlank(), Message::getContent, keyword)
                 .orderByDesc(Message::getCreateTime)
                 .last("limit " + size + " offset " + offset))
@@ -153,6 +154,7 @@ public class MessageService {
 
     private MessageVO toVO(Message message) {
         User sender = userMapper.selectById(message.getSenderId());
-        return MessageVO.of(message, sender == null ? "未知用户" : sender.getNickname());
+        return MessageVO.of(message, sender == null ? "未知用户" : sender.getNickname(),
+            sender == null ? null : sender.getAvatarUrl());
     }
 }

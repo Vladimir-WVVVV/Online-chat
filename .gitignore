@@ -26,4 +26,3 @@ frontend/release/
 *.env
 .env.*
 backend/.env
-backend/run-ai-local.sh

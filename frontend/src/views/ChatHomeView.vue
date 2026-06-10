@@ -1,19 +1,12 @@
 <template>
-  <main class="app-shell">
-    <aside class="sidebar">
+  <main class="app-shell chat-shell" :class="{ 'with-info': activeTarget?.type === 'GROUP' }">
+    <aside class="sidebar" :class="{ 'mobile-hidden': activeTarget }">
       <header class="panel-header">
         <div>
-          <h2>OnlineChat</h2>
-          <span>{{ auth.user?.nickname || auth.user?.username }} · {{ auth.user?.status }}</span>
+          <h2>会话</h2>
+          <span>好友与群聊消息</span>
         </div>
-        <el-button size="small" @click="handleLogout">退出</el-button>
       </header>
-
-      <div class="toolbar-row">
-        <el-button size="small" @click="openAddFriend">添加好友</el-button>
-        <el-button size="small" @click="requestDialog = true">好友申请</el-button>
-        <el-button size="small" @click="openGroupDialog">创建群聊</el-button>
-      </div>
 
       <el-tabs v-model="leftTab" stretch class="left-tabs">
         <el-tab-pane label="好友" name="friends">
@@ -24,9 +17,10 @@
             :class="{ active: activeTarget?.type === 'PRIVATE' && activeTarget.id === friend.id }"
             @click="openPrivate(friend)"
           >
+            <el-avatar :size="36" :src="assetUrl(friend.avatarUrl)">{{ displayInitial(friend) }}</el-avatar>
             <span>
-              <strong>{{ friend.remark || friend.nickname }}</strong>
-              <small>{{ friend.username }} · {{ friend.status }}</small>
+              <strong>{{ friend.remark || friend.nickname || friend.username }}</strong>
+              <small>@{{ friend.username }} · ID {{ friend.id }} · {{ friend.status }}</small>
             </span>
             <el-badge v-if="friend.unreadCount" :value="friend.unreadCount" />
           </button>
@@ -53,6 +47,7 @@
 
     <section class="chat-area">
       <header class="panel-header">
+        <el-button class="mobile-back" size="small" @click="backToList">返回</el-button>
         <div>
           <h3>{{ activeTitle }}</h3>
           <span>{{ connected ? '实时连接已建立' : '正在等待连接' }}</span>
@@ -60,6 +55,7 @@
         <div class="header-actions">
           <el-input v-model="keyword" size="small" placeholder="搜索当前历史" clearable @keyup.enter="loadHistory" />
           <el-button size="small" @click="loadHistory">搜索</el-button>
+          <el-button v-if="activeTarget?.type === 'GROUP'" size="small" @click="rightPanelOpen = !rightPanelOpen">群成员</el-button>
         </div>
       </header>
 
@@ -73,6 +69,9 @@
             class="message-row"
             :class="{ mine: item.data.senderId === auth.user?.id, ai: isAiMessage(item.data) }"
           >
+            <el-avatar class="message-avatar" :size="34" :src="assetUrl(item.data.senderAvatarUrl)">
+              {{ String(item.data.senderName || '?').slice(0, 1) }}
+            </el-avatar>
             <div class="bubble">
               <div class="message-meta">{{ item.data.senderName }} · {{ formatTime(item.data.createTime) }}</div>
               <template v-if="item.data.recalled">
@@ -107,7 +106,7 @@
           <el-upload :show-file-list="false" :before-upload="uploadAndSend">
             <el-button>文件</el-button>
           </el-upload>
-          <el-button :disabled="!canStartVoice" @click="startVoiceCall">语音</el-button>
+          <el-button :disabled="!canStartVoice" :title="voiceSupport.message" @click="startVoiceCall">语音</el-button>
           <el-button :disabled="!activeTarget || aiLoading" @click="prepareAiQuestion">AI答疑</el-button>
           <el-button :disabled="!activeTarget || aiLoading" @click="callAi('SUMMARY')">总结</el-button>
           <el-button :disabled="!activeTarget || aiLoading" @click="callAi('MOOD')">氛围助手</el-button>
@@ -117,106 +116,17 @@
       </footer>
     </section>
 
-    <aside class="info-panel">
-      <el-tabs v-model="rightTab" stretch>
-        <el-tab-pane label="资料" name="profile">
-          <div class="side-section">
-            <el-form label-width="72px">
-              <el-form-item label="昵称"><el-input v-model="profile.nickname" /></el-form-item>
-              <el-form-item label="头像"><el-input v-model="profile.avatarUrl" /></el-form-item>
-              <el-form-item label="简介"><el-input v-model="profile.bio" type="textarea" /></el-form-item>
-              <el-button type="primary" @click="saveProfile">保存资料</el-button>
-            </el-form>
-            <el-divider />
-            <el-form label-width="72px">
-              <el-form-item label="旧密码"><el-input v-model="password.oldPassword" show-password /></el-form-item>
-              <el-form-item label="新密码"><el-input v-model="password.newPassword" show-password /></el-form-item>
-              <el-button @click="changePassword">修改密码</el-button>
-            </el-form>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="通知" name="notifications">
-          <div class="side-section">
-            <el-button size="small" @click="readAll">全部已读</el-button>
-            <div v-for="item in notifications" :key="item.id" class="notice">
-              <strong>{{ item.type }}</strong>
-              <p>{{ item.content }}</p>
-              <el-button v-if="!item.read" size="small" link @click="readNotice(item.id)">标记已读</el-button>
-            </div>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="群成员" name="members">
-          <div class="side-section">
-            <div v-for="member in members" :key="member.userId" class="member-row">
-              <span>{{ member.nickname }} · {{ member.role }}</span>
-              <el-button v-if="activeGroupOwner && member.role !== 'OWNER'" size="small" link @click="removeMember(member.userId)">移除</el-button>
-            </div>
-            <el-button v-if="activeTarget?.type === 'GROUP'" size="small" @click="leaveGroup">退出群聊</el-button>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane v-if="auth.user?.role === 'ADMIN'" label="后台" name="admin">
-          <div class="side-section">
-            <el-descriptions :column="1" border>
-              <el-descriptions-item label="在线人数">{{ metrics.onlineCount }}</el-descriptions-item>
-              <el-descriptions-item label="今日消息">{{ metrics.todayMessageCount }}</el-descriptions-item>
-              <el-descriptions-item label="今日新增">{{ metrics.todayNewUserCount }}</el-descriptions-item>
-            </el-descriptions>
-            <div v-for="user in adminUsers" :key="user.id" class="member-row">
-              <span>{{ user.username }} · {{ user.status }} · {{ user.role }}</span>
-              <el-button v-if="user.role !== 'ADMIN' && user.status !== 'BANNED'" size="small" link @click="ban(user.id)">封禁</el-button>
-              <el-button v-if="user.role !== 'ADMIN' && user.status === 'BANNED'" size="small" link @click="unban(user.id)">解封</el-button>
-            </div>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-    </aside>
-
-    <el-dialog v-model="addFriendDialog" title="添加好友" width="520px">
-      <el-input v-model="searchKeyword" placeholder="输入用户名或昵称" @keyup.enter="searchUsers" />
-      <el-button style="margin-top: 12px" @click="searchUsers">搜索</el-button>
-      <div v-for="user in searchResults" :key="user.id" class="member-row">
-        <span>{{ user.nickname }} · {{ user.username }} · {{ user.status }}</span>
-        <el-button size="small" @click="sendFriendRequest(user.id)">申请</el-button>
+    <aside v-if="activeTarget?.type === 'GROUP'" class="info-panel" :class="{ open: rightPanelOpen }">
+      <el-button class="info-close" text @click="rightPanelOpen = false">关闭</el-button>
+      <header class="side-panel-title"><h3>群成员</h3><small>群 ID {{ activeTarget.id }}</small></header>
+      <div class="side-section">
+        <div v-for="member in members" :key="member.userId" class="member-row">
+          <span><strong>{{ member.nickname || member.username }}</strong><small>@{{ member.username }} · ID {{ member.userId }} · {{ member.role }}</small></span>
+          <el-button v-if="activeGroupOwner && member.role !== 'OWNER'" size="small" link @click="removeMember(member.userId)">移除</el-button>
+        </div>
+        <el-button size="small" @click="leaveGroup">退出群聊</el-button>
       </div>
-    </el-dialog>
-
-    <el-dialog v-model="requestDialog" title="好友申请" width="680px" @open="loadRequests">
-      <el-tabs>
-        <el-tab-pane label="收到的">
-          <div v-for="item in receivedRequests" :key="item.id" class="member-row">
-            <span>{{ item.fromNickname }}：{{ item.message || '请求添加好友' }} · {{ item.status }}</span>
-            <span v-if="item.status === 'PENDING'">
-              <el-button size="small" @click="acceptRequest(item.id)">接受</el-button>
-              <el-button size="small" @click="rejectRequest(item.id)">拒绝</el-button>
-            </span>
-          </div>
-        </el-tab-pane>
-        <el-tab-pane label="发出的">
-          <div v-for="item in sentRequests" :key="item.id" class="member-row">
-            <span>给 {{ item.toNickname }} · {{ item.status }}</span>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-    </el-dialog>
-
-    <el-dialog v-model="groupDialog" title="创建群聊" width="480px">
-      <el-form label-width="72px">
-        <el-form-item label="群名"><el-input v-model="newGroup.name" /></el-form-item>
-        <el-form-item label="简介"><el-input v-model="newGroup.description" type="textarea" /></el-form-item>
-        <el-form-item label="邀请">
-          <el-checkbox-group v-model="newGroup.memberIds" class="friend-check-list">
-            <el-checkbox v-for="friend in friends" :key="friend.id" :label="friend.id">
-              {{ friend.remark || friend.nickname }}（{{ friend.username }}）
-            </el-checkbox>
-          </el-checkbox-group>
-          <el-empty v-if="!friends.length" description="暂无好友可邀请" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="groupDialog = false">取消</el-button>
-        <el-button type="primary" @click="createGroup">创建</el-button>
-      </template>
-    </el-dialog>
+    </aside>
 
     <el-dialog v-model="incomingCall.visible" title="语音来电" width="360px" :close-on-click-modal="false">
       <p>{{ incomingCall.fromUsername || '好友' }} 邀请你语音通话</p>
@@ -236,19 +146,18 @@
 
 <script setup>
 import axios from 'axios'
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import http from '../api/http'
-import { adminApi, aiApi, filesApi, friendsApi, groupsApi, messagesApi, notificationsApi, usersApi } from '../api/modules'
+import { aiApi, filesApi, friendsApi, groupsApi, messagesApi, notificationsApi } from '../api/modules'
 import { useAuthStore } from '../stores/auth'
-import { createVoiceService } from '../voice/voiceService'
+import { assetUrl, displayInitial } from '../utils/display'
+import { createVoiceService, getVoiceSupport } from '../voice/voiceService'
 import { createStompClient } from '../websocket/client'
 
-const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const leftTab = ref('friends')
-const rightTab = ref('profile')
 const friends = ref([])
 const groups = ref([])
 const notifications = ref([])
@@ -262,26 +171,16 @@ const connected = ref(false)
 const stomp = ref(null)
 const messageListRef = ref(null)
 const filePreviews = reactive({})
-const addFriendDialog = ref(false)
-const requestDialog = ref(false)
-const groupDialog = ref(false)
-const searchKeyword = ref('')
-const searchResults = ref([])
-const receivedRequests = ref([])
-const sentRequests = ref([])
-const newGroup = reactive({ name: '', description: '', memberIds: [] })
-const profile = reactive({ nickname: '', avatarUrl: '', bio: '' })
-const password = reactive({ oldPassword: '', newPassword: '' })
-const metrics = reactive({ onlineCount: 0, todayMessageCount: 0, todayNewUserCount: 0 })
-const adminUsers = ref([])
 const aiLoading = ref(false)
+const rightPanelOpen = ref(false)
+const voiceSupport = getVoiceSupport()
 const voice = reactive({ visible: false, status: '已挂断', peerId: null, peerName: '' })
 const incomingCall = reactive({ visible: false, fromUserId: null, fromUsername: '' })
 let voiceService = null
 const TIME_GAP = 5 * 60 * 1000
 
 const activeTitle = computed(() => activeTarget.value ? activeTarget.value.name : '聊天主界面')
-const canStartVoice = computed(() => activeTarget.value?.type === 'PRIVATE' && stomp.value?.connected)
+const canStartVoice = computed(() => voiceSupport.supported && activeTarget.value?.type === 'PRIVATE' && stomp.value?.connected)
 const orderedMessages = computed(() => sortMessages(messages.value))
 const displayMessages = computed(() => {
   const result = []
@@ -309,10 +208,12 @@ const displayMessages = computed(() => {
 const activeGroupOwner = computed(() => activeTarget.value?.type === 'GROUP' && activeTarget.value.ownerId === auth.user?.id)
 
 onMounted(async () => {
-  Object.assign(profile, auth.user || {})
   await reloadAll()
+  await openFromRoute()
   connectSocket()
 })
+
+watch(() => [route.query.type, route.query.id], openFromRoute)
 
 onUnmounted(() => {
   if (stomp.value) stomp.value.deactivate()
@@ -323,7 +224,18 @@ async function reloadAll() {
   friends.value = await friendsApi.list()
   groups.value = await groupsApi.list()
   notifications.value = await notificationsApi.list()
-  if (auth.user?.role === 'ADMIN') await loadAdmin()
+}
+
+async function openFromRoute() {
+  const id = Number(route.query.id)
+  if (!id) return
+  if (route.query.type === 'PRIVATE') {
+    const friend = friends.value.find((item) => item.id === id)
+    if (friend) await openPrivate(friend)
+  } else if (route.query.type === 'GROUP') {
+    const group = groups.value.find((item) => item.id === id)
+    if (group) await openGroup(group)
+  }
 }
 
 function connectSocket() {
@@ -383,7 +295,9 @@ function isForActive(message) {
   return message.conversationType === 'PRIVATE'
     && (message.senderId === activeTarget.value.id
       || message.receiverId === activeTarget.value.id
-      || (isAiMessage(message) && message.receiverId === auth.user?.id && message.groupId === activeTarget.value.id))
+      || (isAiMessage(message)
+        && ((message.receiverId === auth.user?.id && message.groupId === activeTarget.value.id)
+          || (message.receiverId === activeTarget.value.id && message.groupId === auth.user?.id))))
 }
 
 async function reloadBadges() {
@@ -393,7 +307,7 @@ async function reloadBadges() {
 }
 
 async function openPrivate(friend) {
-  activeTarget.value = { type: 'PRIVATE', id: friend.id, name: friend.remark || friend.nickname }
+  activeTarget.value = { type: 'PRIVATE', id: friend.id, name: friend.remark || friend.nickname || friend.username }
   page.value = 1
   await loadHistory()
   await messagesApi.readPrivate(friend.id)
@@ -402,7 +316,6 @@ async function openPrivate(friend) {
 
 async function openGroup(group) {
   activeTarget.value = { type: 'GROUP', id: group.id, name: group.name, ownerId: group.ownerId }
-  rightTab.value = 'members'
   page.value = 1
   await loadHistory()
   members.value = await groupsApi.members(group.id)
@@ -499,14 +412,11 @@ async function callAi(agentType, content = '') {
       agentType,
       content
     }
-    const response = agentType === 'SUMMARY'
-      ? await aiApi.summary(payload)
+    await (agentType === 'SUMMARY'
+      ? aiApi.summary(payload)
       : agentType === 'MOOD'
-        ? await aiApi.mood(payload)
-        : await aiApi.chat(payload)
-    if (response?.message) {
-      upsertMessage(response.message)
-    }
+        ? aiApi.mood(payload)
+        : aiApi.chat(payload))
   } catch (error) {
     ElMessage.error(error.message || 'AI 调用失败')
   } finally {
@@ -521,7 +431,7 @@ function isAiMessage(message) {
 
 async function startVoiceCall() {
   if (!canStartVoice.value) {
-    ElMessage.warning('语音通话仅支持好友私聊')
+    ElMessage.warning(voiceSupport.message || '语音通话仅支持已连接的好友私聊')
     return
   }
   try {
@@ -630,61 +540,6 @@ async function recall(message) {
   scrollToBottom()
 }
 
-function openAddFriend() {
-  searchResults.value = []
-  addFriendDialog.value = true
-}
-
-async function searchUsers() {
-  searchResults.value = await usersApi.search(searchKeyword.value)
-}
-
-async function sendFriendRequest(toUserId) {
-  await friendsApi.request({ toUserId, message: '请求添加好友' })
-  ElMessage.success('好友申请已发送')
-}
-
-async function loadRequests() {
-  receivedRequests.value = await friendsApi.received()
-  sentRequests.value = await friendsApi.sent()
-}
-
-async function acceptRequest(id) {
-  await friendsApi.accept(id)
-  await loadRequests()
-  await reloadBadges()
-}
-
-async function rejectRequest(id) {
-  await friendsApi.reject(id)
-  await loadRequests()
-}
-
-async function openGroupDialog() {
-  await reloadBadges()
-  groupDialog.value = true
-}
-
-async function createGroup() {
-  const group = await groupsApi.create({
-    name: newGroup.name,
-    description: newGroup.description,
-    memberIds: newGroup.memberIds
-  })
-  groups.value = await groupsApi.list()
-  subscribeGroup(group.id)
-  groupDialog.value = false
-  activeTarget.value = { type: 'GROUP', id: group.id, name: group.name, ownerId: group.ownerId }
-  rightTab.value = 'members'
-  page.value = 1
-  await loadHistory()
-  members.value = await groupsApi.members(group.id)
-  newGroup.name = ''
-  newGroup.description = ''
-  newGroup.memberIds = []
-  ElMessage.success('创建群聊成功')
-}
-
 async function leaveGroup() {
   await ElMessageBox.confirm('确定退出当前群聊？', '危险操作')
   await groupsApi.leave(activeTarget.value.id)
@@ -698,49 +553,10 @@ async function removeMember(userId) {
   members.value = await groupsApi.members(activeTarget.value.id)
 }
 
-async function saveProfile() {
-  auth.user = await usersApi.update(profile)
-  auth.persist()
-  ElMessage.success('资料已保存')
-}
-
-async function changePassword() {
-  await usersApi.password(password)
-  password.oldPassword = ''
-  password.newPassword = ''
-  ElMessage.success('密码已修改')
-}
-
-async function readNotice(id) {
-  await notificationsApi.read(id)
-  await reloadBadges()
-}
-
-async function readAll() {
-  await notificationsApi.readAll()
-  await reloadBadges()
-}
-
-async function loadAdmin() {
-  Object.assign(metrics, await adminApi.metrics())
-  adminUsers.value = await adminApi.users()
-}
-
-async function ban(id) {
-  await ElMessageBox.confirm('确定封禁该用户？', '管理员操作')
-  await adminApi.ban(id)
-  await loadAdmin()
-}
-
-async function unban(id) {
-  await adminApi.unban(id)
-  await loadAdmin()
-}
-
-async function handleLogout() {
-  if (stomp.value) await stomp.value.deactivate()
-  await auth.logout()
-  router.push('/login')
+function backToList() {
+  activeTarget.value = null
+  messages.value = []
+  rightPanelOpen.value = false
 }
 
 function formatTime(value) {

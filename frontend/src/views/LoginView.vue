@@ -33,8 +33,8 @@ const auth = useAuthStore()
 const formRef = ref()
 const loading = ref(false)
 const form = reactive({
-  username: 'alice',
-  password: '123456'
+  username: '',
+  password: ''
 })
 
 const rules = {
@@ -48,10 +48,9 @@ async function submit() {
   try {
     await auth.login(form)
     ElMessage.success('登录成功')
-    router.push('/chat')
+    router.push('/app/chat')
   } finally {
     loading.value = false
   }
 }
 </script>
-

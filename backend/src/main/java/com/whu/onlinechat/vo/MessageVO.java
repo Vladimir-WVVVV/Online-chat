@@ -3,15 +3,16 @@ package com.whu.onlinechat.vo;
 import com.whu.onlinechat.entity.Message;
 import java.time.LocalDateTime;
 
-public record MessageVO(Long messageId, String conversationType, Long senderId, String senderName, Long receiverId,
+public record MessageVO(Long messageId, String conversationType, Long senderId, String senderName, String senderAvatarUrl, Long receiverId,
                         Long groupId, String content, String messageType, Long fileId, Boolean recalled,
                         LocalDateTime createTime) {
-    public static MessageVO of(Message message, String senderName) {
+    public static MessageVO of(Message message, String senderName, String senderAvatarUrl) {
         return new MessageVO(
             message.getId(),
             message.getConversationType(),
             message.getSenderId(),
             senderName,
+            senderAvatarUrl,
             message.getReceiverId(),
             message.getGroupId(),
             message.getContent(),

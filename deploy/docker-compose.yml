@@ -43,6 +43,11 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       JWT_SECRET: ${JWT_SECRET:-change-this-development-secret-to-at-least-32-characters}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
+      DEMO_SEED_USERS: ${DEMO_SEED_USERS:-false}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_API_BASE_URL: ${AI_API_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-glm-4.5-flash}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
@@ -52,4 +57,3 @@ volumes:
   mysql_data:
   redis_data:
   uploads:
-

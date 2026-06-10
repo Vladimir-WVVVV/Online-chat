@@ -5,6 +5,8 @@
 ## 用户
 - `GET /api/users/me` 当前用户资料
 - `PUT /api/users/me` 修改 `nickname/avatarUrl/bio`
+- `POST /api/users/avatar` 上传当前用户头像，支持 JPG/PNG/GIF/WebP，最大 5MB
+- `GET /api/users/avatars/{filename}` 读取头像
 - `PUT /api/users/me/password` 修改密码
 - `GET /api/users/search?keyword=xxx` 搜索用户
 - `POST /api/auth/logout` 注销本地登录态
@@ -36,7 +38,7 @@
 - `POST /api/messages/read/private/{friendId}`
 - `POST /api/messages/read/group/{groupId}`
 
-消息返回字段包含 `messageId/conversationType/senderId/senderName/receiverId/groupId/content/messageType/fileId/recalled/createTime`。
+消息返回字段包含 `messageId/conversationType/senderId/senderName/senderAvatarUrl/receiverId/groupId/content/messageType/fileId/recalled/createTime`。
 
 ## 文件
 - `POST /api/files/upload`，multipart 字段名 `file`，单文件 20MB
@@ -56,7 +58,7 @@ AI Provider 环境变量：
 - `AI_PROVIDER=mock/http`
 - `AI_API_BASE_URL=`
 - `AI_API_KEY=`
-- `AI_MODEL=`
+- `AI_MODEL=glm-4.5-flash`
 
 不要提交真实 API Key。`AI_PROVIDER=http` 且 Key 或请求不可用时自动降级 Mock。
 

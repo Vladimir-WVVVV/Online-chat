@@ -33,12 +33,14 @@ AI_PROVIDER=mock
 真实 HTTP AI 可通过环境变量启用：
 ```bash
 AI_PROVIDER=http
-AI_API_BASE_URL=
+AI_API_BASE_URL=https://open.bigmodel.cn/api/paas/v4/chat/completions
 AI_API_KEY=
-AI_MODEL=
+AI_MODEL=glm-4.5-flash
 ```
 
-不要把真实 API Key 提交到代码或文档。HTTP 请求失败或缺少 Key 时会自动降级 Mock。
+`mvn spring-boot:run` 不会自动读取 `.env`。本地推荐将 `.env.example` 复制为 `.env`、填写
+`AI_API_KEY` 后运行 `./backend/run-ai-local.sh`。不要把真实 API Key 提交到代码或文档。
+HTTP 请求失败或缺少 Key 时会自动降级 Mock。
 
 ## 语音说明
 语音通话当前是 1v1 基础版，只在好友私聊页面启用。浏览器或 Electron 需要授权麦克风；公网部署时 WebRTC NAT 穿透可能需要 STUN/TURN，本地课程演示优先使用同机多浏览器或局域网。
@@ -57,6 +59,7 @@ npm run dev
 
 Swagger: <http://localhost:8080/swagger-ui.html>
 
-测试账号：`alice / 123456`、`bob / 123456`、`carol / 123456`、`admin / 123456`。
+默认不创建演示账号。仅在本地课程演示需要时设置 `DEMO_SEED_USERS=true`，启动后会创建
+`alice / 123456`、`bob / 123456`、`carol / 123456`、`admin / 123456`；正式环境必须关闭或修改密码。
 
 更多说明见 `docs/RUN_GUIDE.md`、`docs/API.md`、`docs/DEMO_SCRIPT.md`、`docs/VOICE_CHAT_TECH_REPORT.md`。

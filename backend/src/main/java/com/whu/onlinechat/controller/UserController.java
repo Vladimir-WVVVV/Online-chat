@@ -7,14 +7,21 @@ import com.whu.onlinechat.security.CurrentUser;
 import com.whu.onlinechat.service.UserService;
 import com.whu.onlinechat.vo.UserVO;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/users")
@@ -31,6 +38,20 @@ public class UserController {
     public ApiResult<UserVO> updateMe(@AuthenticationPrincipal CurrentUser user,
                                       @Valid @RequestBody UpdateProfileRequest request) {
         return ApiResult.success(userService.updateProfile(user.id(), request));
+    }
+
+    @PostMapping("/avatar")
+    public ApiResult<UserVO> uploadAvatar(@AuthenticationPrincipal CurrentUser user,
+                                          @RequestPart("file") MultipartFile file) {
+        return ApiResult.success(userService.uploadAvatar(user.id(), file));
+    }
+
+    @GetMapping("/avatars/{filename}")
+    public ResponseEntity<Resource> avatar(@PathVariable String filename) {
+        UserService.AvatarFile avatar = userService.loadAvatar(filename);
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(avatar.contentType()))
+            .body(avatar.resource());
     }
 
     @PutMapping("/me/password")

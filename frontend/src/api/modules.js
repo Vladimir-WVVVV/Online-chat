@@ -3,6 +3,11 @@ import http from './http'
 export const usersApi = {
   me: () => http.get('/users/me'),
   update: (payload) => http.put('/users/me', payload),
+  uploadAvatar: (file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return http.post('/users/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
   password: (payload) => http.put('/users/me/password', payload),
   search: (keyword) => http.get('/users/search', { params: { keyword } })
 }
