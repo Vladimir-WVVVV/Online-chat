@@ -1,0 +1,429 @@
+{
+  "info": {
+    "name": "OnlineChat 全链路自动化测试",
+    "description": "导入 Apifox 后可直接运行。包含：登录→个人信息→搜索→好友→群聊→AI→管理员全流程。\n\n使用前确保：\n1. 后端运行在 http://localhost:8080\n2. 数据库已初始化种子用户 (admin/alice/bob/carol)\n3. 在 Apifox 环境中设置 baseUrl = http://localhost:8080",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "aliceId", "value": "2" },
+    { "key": "bobId", "value": "3" },
+    { "key": "requestId", "value": "" },
+    { "key": "groupId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Alice 登录",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "pm.test('code=0', () => pm.expect(data.code).to.equal(0));",
+              "pm.test('有 token', () => pm.expect(data.data.token).to.not.be.empty);",
+              "if (data.code === 0) {",
+              "    pm.environment.set('token', data.data.token);",
+              "    pm.environment.set('aliceId', data.data.user.id);",
+              "    console.log('Alice token 已存储, id=' + data.data.user.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"username\":\"alice\",\"password\":\"123456\"}" }
+      }
+    },
+    {
+      "name": "2. 查看当前用户信息",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "pm.test('用户名 alice', () => pm.expect(data.data.username).to.equal('alice'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "3. 搜索 Bob",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "const bob = data.data.find(u => u.username === 'bob');",
+              "if (bob) {",
+              "    pm.environment.set('bobId', bob.id);",
+              "    console.log('Bob id=' + bob.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/users/search?keyword=bob", "host": ["{{baseUrl}}"], "path": ["api", "users", "search"], "query": [{ "key": "keyword", "value": "bob" }] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "4. Alice 向 Bob 发好友申请",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('好友申请发送成功', () => pm.expect(data.code).to.equal(0));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/friends/requests", "host": ["{{baseUrl}}"], "path": ["api", "friends", "requests"] },
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"toUserId\":{{bobId}},\"message\":\"你好，我是Alice\"}" }
+      }
+    },
+    {
+      "name": "5. Bob 登录",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('Bob 登录成功', () => pm.expect(data.code).to.equal(0));",
+              "if (data.code === 0) {",
+              "    pm.environment.set('token', data.data.token);",
+              "    console.log('Bob token 已存储');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"username\":\"bob\",\"password\":\"123456\"}" }
+      }
+    },
+    {
+      "name": "6. Bob 查看收到的好友申请",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "if (data.data && data.data.length > 0) {",
+              "    const pending = data.data.find(r => r.status === 'PENDING');",
+              "    if (pending) {",
+              "        pm.environment.set('requestId', pending.id);",
+              "        console.log('待处理申请 id=' + pending.id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/friends/requests/received", "host": ["{{baseUrl}}"], "path": ["api", "friends", "requests", "received"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "7. Bob 接受好友申请",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('接受成功', () => pm.expect(data.code).to.equal(0));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/friends/requests/{{requestId}}/accept", "host": ["{{baseUrl}}"], "path": ["api", "friends", "requests", "{{requestId}}", "accept"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "8. Bob 查看好友列表",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "pm.test('好友列表不为空', () => pm.expect(data.data.length).to.be.greaterThan(0));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/friends", "host": ["{{baseUrl}}"], "path": ["api", "friends"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "9. Bob 创建群聊（邀请 Alice）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('创建群聊成功', () => pm.expect(data.code).to.equal(0));",
+              "if (data.code === 0) {",
+              "    pm.environment.set('groupId', data.data.id);",
+              "    console.log('群聊 id=' + data.data.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/groups", "host": ["{{baseUrl}}"], "path": ["api", "groups"] },
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"name\":\"测试群聊\",\"description\":\"自动化测试群\",\"memberIds\":[{{aliceId}}]}" }
+      }
+    },
+    {
+      "name": "10. Bob 查看群聊列表",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "pm.test('群聊列表不为空', () => pm.expect(data.data.length).to.be.greaterThan(0));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/groups", "host": ["{{baseUrl}}"], "path": ["api", "groups"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "11. Bob 查看群成员",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/groups/{{groupId}}/members", "host": ["{{baseUrl}}"], "path": ["api", "groups", "{{groupId}}", "members"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "12. AI 答疑（Bob 在群聊中）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "pm.test('AI 回复不为空', () => pm.expect(data.data.content).to.not.be.empty);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/ai/chat", "host": ["{{baseUrl}}"], "path": ["api", "ai", "chat"] },
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"conversationType\":\"GROUP\",\"targetId\":{{groupId}},\"agentType\":\"QA\",\"content\":\"请介绍一下WebSocket\"}" }
+      }
+    },
+    {
+      "name": "13. Admin 登录",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('Admin 登录成功', () => pm.expect(data.code).to.equal(0));",
+              "if (data.code === 0) {",
+              "    pm.environment.set('token', data.data.token);",
+              "    console.log('Admin token 已存储');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\"username\":\"admin\",\"password\":\"123456\"}" }
+      }
+    },
+    {
+      "name": "14. Admin 查看所有用户",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));",
+              "pm.test('用户列表不为空', () => pm.expect(data.data.length).to.be.greaterThan(0));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "15. Admin 查看指标",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(0));",
+              "pm.test('指标包含在线人数', () => pm.expect(data.data.onlineCount).to.be.a('number'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/admin/metrics", "host": ["{{baseUrl}}"], "path": ["api", "admin", "metrics"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "16. 普通用户访问管理员接口（应被拒绝）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('应返回 4xx', () => pm.expect(pm.response.code).to.be.within(400, 499));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] },
+        "header": [{ "key": "Authorization", "value": "Bearer invalid_token" }]
+      }
+    },
+    {
+      "name": "17. 查询通知",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/notifications", "host": ["{{baseUrl}}"], "path": ["api", "notifications"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    },
+    {
+      "name": "18. 未读通知数",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const data = pm.response.json();",
+              "pm.test('状态码 200', () => pm.expect(pm.response.code).to.equal(0));",
+              "pm.test('返回 count', () => pm.expect(data.data.count).to.be.a('number'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/api/notifications/unread-count", "host": ["{{baseUrl}}"], "path": ["api", "notifications", "unread-count"] },
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+      }
+    }
+  ]
+}

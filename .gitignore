@@ -16,6 +16,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/release/
 
+# Test reports & docs (local only)
+测试/
+
 # Logs
 *.log
 
