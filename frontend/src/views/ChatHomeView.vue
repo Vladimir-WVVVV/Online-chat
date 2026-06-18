@@ -67,7 +67,7 @@
           <article
             v-else
             class="message-row"
-            :class="{ mine: item.data.senderId === auth.user?.id, ai: isAiMessage(item.data) }"
+            :class="{ mine: isSelfMessage(item.data), ai: isAiMessage(item.data) }"
           >
             <el-avatar class="message-avatar" :size="34" :src="assetUrl(item.data.senderAvatarUrl)">
               {{ String(item.data.senderName || '?').slice(0, 1) }}
@@ -172,6 +172,7 @@ const stomp = ref(null)
 const messageListRef = ref(null)
 const filePreviews = reactive({})
 const aiLoading = ref(false)
+const pendingAiQuestion = ref(null)
 const rightPanelOpen = ref(false)
 const voiceSupport = getVoiceSupport()
 const voice = reactive({ visible: false, status: '已挂断', peerId: null, peerName: '' })
@@ -284,6 +285,7 @@ async function handleIncoming(message) {
 
 function upsertMessage(message) {
   if (isForActive(message)) {
+    if (replacePendingAiQuestion(message)) return
     messages.value = mergeMessages(messages.value, [message])
   }
   scrollToBottom()
@@ -391,6 +393,19 @@ async function callAi(agentType, content = '') {
     return
   }
   aiLoading.value = true
+  const questionTime = Date.now()
+  const questionMessage = agentType === 'QA' ? createLocalAiQuestion(content, questionTime) : null
+  if (questionMessage) {
+    pendingAiQuestion.value = {
+      tempId: questionMessage.tempId,
+      content: questionMessage.content,
+      conversationType: questionMessage.conversationType,
+      targetId: activeTarget.value.id,
+      startedAt: questionTime
+    }
+    messages.value = mergeMessages(messages.value, [questionMessage])
+    scrollToBottom()
+  }
   const loadingMessage = {
     tempId: `ai-loading-${Date.now()}`,
     conversationType: activeTarget.value.type,
@@ -400,7 +415,7 @@ async function callAi(agentType, content = '') {
     groupId: activeTarget.value.id,
     content: 'AI 正在思考中...',
     messageType: 'TEXT',
-    createTime: new Date().toISOString(),
+    createTime: new Date(questionTime + 1).toISOString(),
     aiLoading: true
   }
   messages.value = mergeMessages(messages.value, [loadingMessage])
@@ -412,21 +427,106 @@ async function callAi(agentType, content = '') {
       agentType,
       content
     }
-    await (agentType === 'SUMMARY'
+    const response = await (agentType === 'SUMMARY'
       ? aiApi.summary(payload)
       : agentType === 'MOOD'
         ? aiApi.mood(payload)
         : aiApi.chat(payload))
+    const returnedMessages = extractAiMessages(response)
+    const messagesToMerge = []
+    for (const message of returnedMessages) {
+      if (!replacePendingAiQuestion(message)) {
+        messagesToMerge.push(message)
+      }
+    }
+    if (messagesToMerge.length) {
+      messages.value = mergeMessages(messages.value, messagesToMerge)
+    }
   } catch (error) {
     ElMessage.error(error.message || 'AI 调用失败')
+    if (agentType === 'QA') {
+      messages.value = mergeMessages(messages.value, [createAiFailureMessage()])
+    }
   } finally {
     messages.value = messages.value.filter((message) => message.tempId !== loadingMessage.tempId)
+    pendingAiQuestion.value = null
     aiLoading.value = false
+    scrollToBottom()
   }
 }
 
 function isAiMessage(message) {
   return ['答疑助手', '总结助手', '氛围助手'].includes(message?.senderName) || message?.aiLoading || message?.senderId === -1
+}
+
+function createLocalAiQuestion(content, createdAt = Date.now()) {
+  return {
+    tempId: `ai-question-${Date.now()}`,
+    conversationType: activeTarget.value.type,
+    senderId: auth.user?.id,
+    senderName: auth.user?.nickname || auth.user?.username,
+    senderAvatarUrl: auth.user?.avatarUrl,
+    receiverId: activeTarget.value.type === 'PRIVATE' ? activeTarget.value.id : null,
+    groupId: activeTarget.value.type === 'GROUP' ? activeTarget.value.id : null,
+    content,
+    messageType: 'TEXT',
+    createTime: new Date(createdAt).toISOString(),
+    aiQuestionPending: true
+  }
+}
+
+function createAiFailureMessage() {
+  return {
+    tempId: `ai-error-${Date.now()}`,
+    conversationType: activeTarget.value.type,
+    senderId: -1,
+    senderName: '答疑助手',
+    receiverId: activeTarget.value.type === 'PRIVATE' ? auth.user?.id : null,
+    groupId: activeTarget.value.id,
+    content: 'AI答疑失败，请稍后重试',
+    messageType: 'TEXT',
+    createTime: new Date().toISOString()
+  }
+}
+
+function extractAiMessages(response) {
+  if (Array.isArray(response?.messages)) return response.messages
+  return response?.message ? [response.message] : []
+}
+
+function replacePendingAiQuestion(message) {
+  if (!isPendingAiQuestionMessage(message)) return false
+  const pending = pendingAiQuestion.value
+  const displayMessage = {
+    ...message,
+    createTime: new Date(pending.startedAt).toISOString()
+  }
+  messages.value = mergeMessages(
+    messages.value.filter((item) => item.tempId !== pending.tempId),
+    [displayMessage]
+  )
+  scrollToBottom()
+  return true
+}
+
+function isPendingAiQuestionMessage(message) {
+  const pending = pendingAiQuestion.value
+  if (!pending || !hasPersistedMessageId(message) || !isSelfMessage(message)) return false
+  if (message?.content !== pending.content) return false
+  if (message?.conversationType !== pending.conversationType) return false
+  if (!isSamePendingConversation(message, pending)) return false
+  return Math.abs(normalizeMessageTime(message) - pending.startedAt) < 10 * 60 * 1000
+}
+
+function hasPersistedMessageId(message) {
+  return getMessageId(message) > 0
+}
+
+function isSamePendingConversation(message, pending) {
+  if (pending.conversationType === 'GROUP') {
+    return normalizeId(message?.groupId) === normalizeId(pending.targetId)
+  }
+  return normalizeId(message?.receiverId) === normalizeId(pending.targetId)
 }
 
 async function startVoiceCall() {
@@ -531,7 +631,21 @@ async function downloadFile(id) {
 }
 
 function canRecall(message) {
-  return message.senderId === auth.user?.id && !message.recalled && Date.now() - normalizeMessageTime(message) < 120000
+  return isSelfMessage(message) && !message.recalled && Date.now() - normalizeMessageTime(message) < 120000
+}
+
+function normalizeId(id) {
+  return id === null || id === undefined ? '' : String(id)
+}
+
+function getSenderId(message) {
+  return message?.senderId ?? message?.sender?.id ?? message?.fromUserId
+}
+
+function isSelfMessage(message) {
+  const senderId = normalizeId(getSenderId(message))
+  const currentUserId = normalizeId(auth.user?.id)
+  return Boolean(senderId && currentUserId && senderId === currentUserId)
 }
 
 async function recall(message) {

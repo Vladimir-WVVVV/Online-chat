@@ -10,6 +10,7 @@ import com.whu.onlinechat.service.FriendService;
 import com.whu.onlinechat.service.GroupService;
 import com.whu.onlinechat.service.UserService;
 import com.whu.onlinechat.vo.MessageVO;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -57,6 +58,10 @@ public class AiServiceImpl implements AiService {
         userService.requireActiveUser(userId);
         String conversationType = normalizeConversationType(request.conversationType());
         validateConversation(userId, request.targetId(), conversationType);
+        List<MessageVO> savedMessages = new ArrayList<>();
+        if (agentType == AiAgentType.QA) {
+            savedMessages.add(saveUserQuestion(userId, request.targetId(), conversationType, content));
+        }
         List<String> recentMessages = recentMessages(userId, request.targetId(), conversationType);
         if (agentType == AiAgentType.SUMMARY && recentMessages.size() < 3) {
             content = "当前消息较少，暂无可总结内容";
@@ -64,7 +69,8 @@ public class AiServiceImpl implements AiService {
             content = callProvider(agentType, content, recentMessages);
         }
         MessageVO message = saveAndPush(userId, request.targetId(), conversationType, agentType, content);
-        return new AiChatResponse(agentType.name(), agentType.displayName(), content, message);
+        savedMessages.add(message);
+        return new AiChatResponse(agentType.name(), agentType.displayName(), content, message, savedMessages);
     }
 
     private String callProvider(AiAgentType agentType, String content, List<String> recentMessages) {
@@ -149,6 +155,31 @@ public class AiServiceImpl implements AiService {
         }
         messageMapper.insert(message);
         MessageVO vo = MessageVO.of(message, agentType.displayName(), aiUser.getAvatarUrl());
+        if ("PRIVATE".equals(conversationType)) {
+            messagingTemplate.convertAndSendToUser(String.valueOf(userId), "/queue/messages", vo);
+            messagingTemplate.convertAndSendToUser(String.valueOf(targetId), "/queue/messages", vo);
+        } else {
+            messagingTemplate.convertAndSend("/topic/groups/" + targetId, vo);
+        }
+        return vo;
+    }
+
+    private MessageVO saveUserQuestion(Long userId, Long targetId, String conversationType, String content) {
+        User sender = userMapper.selectById(userId);
+        Message message = new Message();
+        message.setConversationType(conversationType);
+        message.setSenderId(userId);
+        message.setContent(content);
+        message.setMessageType("TEXT");
+        message.setRecalled(0);
+        if ("PRIVATE".equals(conversationType)) {
+            message.setReceiverId(targetId);
+        } else {
+            message.setGroupId(targetId);
+        }
+        messageMapper.insert(message);
+        MessageVO vo = MessageVO.of(message, sender == null ? "未知用户" : sender.getNickname(),
+            sender == null ? null : sender.getAvatarUrl());
         if ("PRIVATE".equals(conversationType)) {
             messagingTemplate.convertAndSendToUser(String.valueOf(userId), "/queue/messages", vo);
             messagingTemplate.convertAndSendToUser(String.valueOf(targetId), "/queue/messages", vo);
